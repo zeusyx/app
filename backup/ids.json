@@ -2,7 +2,7 @@
   "type": "painel-premium-layout-backup",
   "layout": "protecao",
   "version": 1,
-  "createdAt": "2026-03-31T22:12:04.663Z",
+  "createdAt": "2026-03-31T22:25:00.717Z",
   "data": {
     "1.2.5": [
       "2yPGnlYYzyN8zy8YCvYgFB5t_c-eYbXcKxWj_uCGRlVHBeravNmEEw9xJXMmzH1MankpumpKaiKNosm9L2oHbA:33ad5779db3ad63f1b629dee3c35f405"
@@ -18,6 +18,9 @@
     ],
     "1.2.7": [
       "HDW2V2Om6Q5SFVLeK5DbTrJ9XfjwtVw44OvH8p_WCj79K7O5rlGS1-auYrSHAO5otYmJtkhx7ZgbFNka0XwRvA:d4f21831c4030b7c9a6dab076e64edf0"
+    ],
+    "1.2.8": [
+      "bkLja_sn2AR9QIJ6asdkA186njGnnrQHyvuBOpd9g-wUwKg_yfT_OLrOe61Hl2QlkceOrDATnsQedOWdoZL6nA:77bd321387d063c3f24adc749666d944"
     ]
   }
 }
