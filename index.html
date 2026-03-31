@@ -1195,16 +1195,15 @@ function injectGithubBridge(html, layoutName) {
         return false;
       }
       try {
-        const content = await api.importTextFile("layout/index.html");
+        const content = await api.importTextFile("backup/app.html");
         if (typeof applyImportedLayoutContent !== "function") throw new Error("Importação de layout indisponível");
-        applyImportedLayoutContent(content, "GitHub: layout/index.html");
+        applyImportedLayoutContent(content, "GitHub: backup/app.html");
         if (typeof hydrateFromImportedLayout === "function") hydrateFromImportedLayout();
         if (typeof saveConfig === "function") saveConfig();
         if (typeof updateGeneratedCode === "function") updateGeneratedCode();
         notify("Layout importado do GitHub.", "success");
         return true;
       } catch (err) {
-        if (originalImportLayout) return originalImportLayout.apply(this, arguments);
         notify((err && err.message) || "Falha ao importar layout do GitHub.", "error");
         return false;
       }
