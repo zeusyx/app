@@ -6,7 +6,7 @@
   <script>
     const APP_VERSION='0.0.0';
     const APP_DOWNLOAD='https://primevpnx.github.io/app/';
-    const APP_FIREBASE_DATABASE_URL = '';
+    const APP_FIREBASE_DATABASE_URL = 'https://painelpro-3188c-default-rtdb.firebaseio.com';
     const APP_FIREBASE_CONFIG_PATH = 'backup/app';
     const APP_REMOTE_CONFIG_CACHE_TTL_MS = 60 * 1000;
     const APP_REMOTE_CONFIG_POLL_MS = 15 * 1000;
@@ -761,7 +761,7 @@
             left: 50%;
             height: auto;
             max-height: 85vh;
-            width: calc(100% - 24px);
+            width: 100%;
             max-width: 360px;
             background-color: rgba(var(--body-bg-rgb), 0.95);
             backdrop-filter: blur(10px);
@@ -773,7 +773,7 @@
             overflow-x: hidden;
             display: flex;
             flex-direction: column;
-            padding: 14px;
+            padding: 15px;
             box-sizing: border-box;
             border-radius: 20px;
             border: 1px solid var(--server-select-border);
@@ -1894,7 +1894,39 @@
             box-shadow: 0 2px 8px rgba(var(--accent-color-rgb), 0.3);
         }
 
-        .update-required-actions {
+        
+        .update-novidades {
+            margin-top: 12px;
+            margin-bottom: 14px;
+            text-align: left;
+            background: rgba(var(--body-bg-rgb), 0.28);
+            border: 1px solid var(--server-select-border);
+            border-radius: 14px;
+            padding: 12px 14px;
+        }
+
+        .update-novidades strong {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--accent-color);
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .update-novidades-text {
+            margin: 0 !important;
+            font-size: 13px !important;
+            color: var(--secondary-text) !important;
+            line-height: 1.55 !important;
+            white-space: normal;
+        }
+
+        body.dark-theme .update-novidades {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+.update-required-actions {
             display: flex;
             gap: 10px;
             margin-top: 4px;
@@ -4804,6 +4836,10 @@ body.dark-theme #configModal .accordion-item.operator-inter {
                 Nova atualização do aplicativo disponível.<br>
                 Atualize agora a base para a <span class="new-version">v0.0.0</span>.
             </p>
+            <div class="update-novidades" style="display:none;">
+                <strong>Novidades:</strong>
+                <p class="update-novidades-text"></p>
+            </div>
             <div class="update-required-actions">
                 <button class="dragon-button" id="updateRequiredDownloadBtn">
                     BAIXAR
@@ -4871,7 +4907,8 @@ body.dark-theme #configModal .accordion-item.operator-inter {
             version: normalizeVersion(APP_VERSION),
             download: String(APP_DOWNLOAD || '').trim(),
             source: 'local',
-            updatedAt: 0
+            updatedAt: 0,
+            description: ''
         };
 
         function readPanelFirebaseConfig() {
@@ -4916,9 +4953,17 @@ body.dark-theme #configModal .accordion-item.operator-inter {
                 APP_DOWNLOAD ?? ''
             ).trim();
 
+            const description = String(
+                source.updateDescription ?? source.description ??
+                (source.data && source.data.updateDescription) ??
+                (source.data && source.data.description) ??
+                ''
+            ).trim();
+
             return {
                 version: version || normalizeVersion(APP_VERSION),
                 download,
+                description,
                 raw: data
             };
         }
@@ -4929,6 +4974,7 @@ body.dark-theme #configModal .accordion-item.operator-inter {
 
             appUpdateRuntime.version = normalized.version;
             appUpdateRuntime.download = normalized.download || String(APP_DOWNLOAD || '').trim();
+            appUpdateRuntime.description = normalized.description || '';
             appUpdateRuntime.source = source;
             appUpdateRuntime.updatedAt = Date.now();
 
@@ -4936,6 +4982,7 @@ body.dark-theme #configModal .accordion-item.operator-inter {
                 localStorage.setItem(APP_REMOTE_CONFIG_CACHE_KEY, JSON.stringify({
                     version: appUpdateRuntime.version,
                     download: appUpdateRuntime.download,
+                    description: appUpdateRuntime.description,
                     source: source,
                     updatedAt: appUpdateRuntime.updatedAt
                 }));
@@ -4960,7 +5007,7 @@ body.dark-theme #configModal .accordion-item.operator-inter {
             const endpoint = getRemoteAppConfigEndpoint();
             if (!endpoint) return null;
             if (!force && appUpdateRuntime.updatedAt && (Date.now() - appUpdateRuntime.updatedAt) < 5000) {
-                return { version: appUpdateRuntime.version, download: appUpdateRuntime.download };
+                return { version: appUpdateRuntime.version, download: appUpdateRuntime.download, description: appUpdateRuntime.description };
             }
 
             const response = await fetch(`${endpoint}?t=${Date.now()}`, {
@@ -5316,6 +5363,24 @@ body.dark-theme #configModal .accordion-item.operator-inter {
 
                         if (newVersionEl) {
                             newVersionEl.textContent = "v" + requiredVersion;
+                        }
+
+                        const novidadesWrap = document.querySelector('#updateRequiredModal .update-novidades');
+                        const novidadesText = document.querySelector('#updateRequiredModal .update-novidades-text');
+                        const description = String(appUpdateRuntime.description || '').trim();
+                        if (novidadesWrap && novidadesText) {
+                            if (description) {
+                                novidadesText.innerHTML = description
+                                    .split('\n')
+                                    .map(line => line.trim())
+                                    .filter(Boolean)
+                                    .map(line => `• ${line}`)
+                                    .join('<br>');
+                                novidadesWrap.style.display = 'block';
+                            } else {
+                                novidadesText.innerHTML = '';
+                                novidadesWrap.style.display = 'none';
+                            }
                         }
 
                         if (downloadBtn) {
