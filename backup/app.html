@@ -4,8 +4,12 @@
 </head>
   
   <script>
-    const APP_VERSION='1.0.0';
+    const APP_VERSION='0.0.0';
     const APP_DOWNLOAD='https://primevpnx.github.io/app/';
+    const APP_FIREBASE_DATABASE_URL = '';
+    const APP_FIREBASE_CONFIG_PATH = 'backup/app';
+    const APP_REMOTE_CONFIG_CACHE_TTL_MS = 60 * 1000;
+    const APP_REMOTE_CONFIG_POLL_MS = 15 * 1000;
     const renovarUrl = '';
     const speedTestUrl = 'https://fast.com/pt/';
     const supportUrl = '';
@@ -143,7 +147,6 @@
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     }
 
-    body.dark-theme .navbar-links li a,
     body.dark-theme .button-secondary,
     body.dark-theme .user-info-container .detail-item,
     body.dark-theme #logs-expanded .logs-content div,
@@ -153,7 +156,6 @@
       color: var(--primary-text);
     }
 
-    body.dark-theme .navbar-links li a:hover,
     body.dark-theme .button-secondary:hover {
       background: rgba(255, 255, 255, 0.08);
     }
@@ -759,7 +761,7 @@
             left: 50%;
             height: auto;
             max-height: 85vh;
-            width: 90%;
+            width: 100%;
             max-width: 360px;
             background-color: rgba(var(--body-bg-rgb), 0.95);
             backdrop-filter: blur(10px);
@@ -886,49 +888,26 @@
         }
 
 
-        .navbar-links li a {
-            display:flex;
-            flex-direction:column;
-            align-items:center;
-            justify-content:center;
-            padding:12px;
-            width:100%;
-            border-radius:12px;
-            background: rgba(var(--body-bg-rgb),0.55);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(0,0,0,0.08);
-            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-            transition: all .25s ease;
-        }
-
         .navbar-links.dragging {
             cursor: grabbing;
             scroll-behavior: auto;
         }
 
-        .navbar-links li a:hover {
-            background: rgba(var(--body-bg-rgb),0.75);
-            border-color: var(--accent-color);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(var(--accent-color-rgb),0.25);
+        .navbar-links,
+        #side-navbar .navbar-links {
+            width: 100%;
+            max-width: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-sizing: border-box;
         }
 
-        .navbar-links li a i {
-            font-size: 24px;
-            margin-bottom: 8px;
-            margin-right: 12px;
-            width: auto;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
-        }
-
-        .navbar-links li a:hover i {
-            transform: scale(1.2);
-            color: var(--accent-color);
+        .navbar-links li,
+        .menu-item {
+           width: 100%;
+           max-width: 100%;
+           min-width: 0;
+           box-sizing: border-box;
         }
 
         .navbar-footer {
@@ -2376,7 +2355,6 @@
 
             #dynamic-navbar-links {
                 max-height: calc(82vh - 110px);
-                padding-right: 6px;
             }
 
             #termsModal .modal-content,
@@ -2390,16 +2368,6 @@
                 min-width: 100px;
             }
 
-            .navbar-links li a {
-                height: 90px;
-                padding: 3px;
-                font-size: 13px;
-            }
-
-            .navbar-links li a i {
-                font-size: 22px;
-                margin-bottom: 5px;
-            }
         }
 
         @media (max-width: 480px) {
@@ -2467,14 +2435,6 @@
                 max-width: 400px;
             }
 
-            .navbar-links li a {
-                height: 95px;
-                font-size: 14px;
-            }
-
-            .navbar-links li a i {
-                font-size: 24px;
-            }
         }
 
         @media (min-width: 1200px) {
@@ -2489,10 +2449,6 @@
                 margin: auto;
             }
 
-            .navbar-links li a {
-                height: 100px;
-                font-size: 16px;
-            }
         }
 
         .theme-mode-panel {
@@ -3022,7 +2978,6 @@
             max-height: 0;
             overflow-y: scroll;
             overflow-x: hidden;
-            scrollbar-gutter: stable;
         }
 
         #configModal .accordion-content.active,
@@ -3540,8 +3495,6 @@
         #dynamic-navbar-links {
             overflow-y: auto;
             max-height: calc(85vh - 110px);
-            padding-right: 8px;
-            scrollbar-gutter: stable;
             -webkit-overflow-scrolling: touch;
         }
 
@@ -4911,7 +4864,149 @@ body.dark-theme #configModal .accordion-item.operator-inter {
         const TERMS_ACCEPTED_FLAG = LS_PREFIX + 'termsAccepted_v2';
         const UPDATE_REMIND_LATER_KEY = LS_PREFIX + 'updateRemindLaterUntil';
         const UPDATE_REMIND_LATER_MS = 2 * 60 * 60 * 1000;
+        const APP_REMOTE_CONFIG_CACHE_KEY = LS_PREFIX + 'remoteAppUpdateConfig';
         let updateReminderTimeout = null;
+        let remoteAppConfigInterval = null;
+        const appUpdateRuntime = {
+            version: normalizeVersion(APP_VERSION),
+            download: String(APP_DOWNLOAD || '').trim(),
+            source: 'local',
+            updatedAt: 0
+        };
+
+        function readPanelFirebaseConfig() {
+            try {
+                return JSON.parse(localStorage.getItem('painel_firebase_config_v1') || '{}') || {};
+            } catch (err) {
+                return {};
+            }
+        }
+
+        function getRemoteAppConfigUrl() {
+            const inlineUrl = String(APP_FIREBASE_DATABASE_URL || '').trim().replace(/\/+$/, '');
+            if (inlineUrl) return inlineUrl;
+            const panelConfig = readPanelFirebaseConfig();
+            return String(panelConfig && panelConfig.databaseURL || '').trim().replace(/\/+$/, '');
+        }
+
+        function getRemoteAppConfigEndpoint() {
+            const baseUrl = getRemoteAppConfigUrl();
+            const path = String(APP_FIREBASE_CONFIG_PATH || 'backup/app').trim().replace(/^\/+|\/+$/g, '');
+            if (!baseUrl || !path) return '';
+            return `${baseUrl}/${path}.json`;
+        }
+
+        function normalizeRemoteAppPayload(payload) {
+            const source = payload && typeof payload === 'object' ? payload : {};
+            const data = source && typeof source === 'object'
+                ? source
+                : (source && typeof source.data === 'object' ? source.data : {});
+            const version = normalizeVersion(
+                source.appVersion ?? source.version ?? source.APP_VERSION ??
+                (source.data && source.data.appVersion) ??
+                (source.data && source.data.version) ??
+                (source.data && source.data.APP_VERSION) ??
+                APP_VERSION
+            );
+            const download = String(
+                source.appDownload ?? source.download ?? source.APP_DOWNLOAD ??
+                (source.data && source.data.appDownload) ??
+                (source.data && source.data.download) ??
+                (source.data && source.data.APP_DOWNLOAD) ??
+                APP_DOWNLOAD ?? ''
+            ).trim();
+
+            return {
+                version: version || normalizeVersion(APP_VERSION),
+                download,
+                raw: data
+            };
+        }
+
+        function applyRemoteAppConfig(payload, source = 'firebase') {
+            const normalized = normalizeRemoteAppPayload(payload);
+            if (!normalized.version) return false;
+
+            appUpdateRuntime.version = normalized.version;
+            appUpdateRuntime.download = normalized.download || String(APP_DOWNLOAD || '').trim();
+            appUpdateRuntime.source = source;
+            appUpdateRuntime.updatedAt = Date.now();
+
+            try {
+                localStorage.setItem(APP_REMOTE_CONFIG_CACHE_KEY, JSON.stringify({
+                    version: appUpdateRuntime.version,
+                    download: appUpdateRuntime.download,
+                    source: source,
+                    updatedAt: appUpdateRuntime.updatedAt
+                }));
+            } catch (err) {}
+
+            return true;
+        }
+
+        function loadCachedRemoteAppConfig() {
+            try {
+                const cached = JSON.parse(localStorage.getItem(APP_REMOTE_CONFIG_CACHE_KEY) || 'null');
+                if (!cached || typeof cached !== 'object') return false;
+                const updatedAt = Number(cached.updatedAt || 0);
+                if (!updatedAt || (Date.now() - updatedAt) > APP_REMOTE_CONFIG_CACHE_TTL_MS) return false;
+                return applyRemoteAppConfig(cached, 'cache');
+            } catch (err) {
+                return false;
+            }
+        }
+
+        async function fetchRemoteAppConfig(force = false) {
+            const endpoint = getRemoteAppConfigEndpoint();
+            if (!endpoint) return null;
+            if (!force && appUpdateRuntime.updatedAt && (Date.now() - appUpdateRuntime.updatedAt) < 5000) {
+                return { version: appUpdateRuntime.version, download: appUpdateRuntime.download };
+            }
+
+            const response = await fetch(`${endpoint}?t=${Date.now()}`, {
+                method: 'GET',
+                cache: 'no-store',
+                headers: { 'Accept': 'application/json' }
+            });
+
+            let payload = null;
+            try {
+                payload = await response.json();
+            } catch (err) {
+                payload = null;
+            }
+
+            if (!response.ok) {
+                throw new Error('Falha ao carregar configuração remota da atualização.');
+            }
+
+            if (payload && typeof payload === 'object') {
+                applyRemoteAppConfig(payload, 'firebase');
+            }
+
+            return payload;
+        }
+
+        async function syncRemoteAppConfig(force = false) {
+            try {
+                await fetchRemoteAppConfig(force);
+                return true;
+            } catch (error) {
+                console.warn('Falha ao sincronizar versão remota:', error);
+                return false;
+            }
+        }
+
+        function startRemoteAppConfigSync() {
+            if (remoteAppConfigInterval || !getRemoteAppConfigEndpoint()) return;
+            remoteAppConfigInterval = setInterval(() => {
+                syncRemoteAppConfig(false).then(updated => {
+                    if (updated) checkAppUpdate(false);
+                });
+            }, APP_REMOTE_CONFIG_POLL_MS);
+        }
+
+        loadCachedRemoteAppConfig();
 
         const mainBackgroundImageUrl = 'https://i.postimg.cc/BvdGwHnx/file-00000000ec90622fba652c098d54eca5-1.jpg';
         let mainBgPositionY = '0px';
@@ -5182,7 +5277,10 @@ body.dark-theme #configModal .accordion-item.operator-inter {
 
         async function checkAppUpdate(showToastMessages = false) {
             try {
-                const requiredVersion = normalizeVersion(APP_VERSION);
+                await syncRemoteAppConfig(false);
+
+                const requiredVersion = normalizeVersion(appUpdateRuntime.version || APP_VERSION);
+                const downloadUrl = String(appUpdateRuntime.download || APP_DOWNLOAD || '').trim();
                 let installedVersion = getInstalledAppVersion();
 
                 console.log('Versão instalada:', installedVersion);
@@ -5225,9 +5323,9 @@ body.dark-theme #configModal .accordion-item.operator-inter {
                             downloadBtn.onclick = () => {
                                 clearUpdateRemindLater();
                                 if (typeof window?.DtOpenExternalUrl?.execute === 'function') {
-                                    window.DtOpenExternalUrl.execute(APP_DOWNLOAD);
+                                    window.DtOpenExternalUrl.execute(downloadUrl || APP_DOWNLOAD);
                                 } else {
-                                    window.location.href = APP_DOWNLOAD;
+                                    window.location.href = downloadUrl || APP_DOWNLOAD;
                                 }
                             };
                         }
@@ -5260,8 +5358,10 @@ body.dark-theme #configModal .accordion-item.operator-inter {
             }
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             scheduleUpdateReminder();
+            await syncRemoteAppConfig(true);
+            startRemoteAppConfigSync();
             checkAppUpdate(true);
         });
 
