@@ -73,6 +73,8 @@ XRAY_TUNING_DIR="/etc/primevpn/xray-tuning"
 XRAY_TUNING_BACKUP="$XRAY_TUNING_DIR/config.before-vless-xhttp-tls.json"
 XRAY_TUNING_MARKER="$XRAY_TUNING_DIR/applied"
 XRAY_TUNING_META="$XRAY_TUNING_DIR/targets.count"
+XRAY_TUNING_STATE="$XRAY_TUNING_DIR/last_state"
+XRAY_TUNING_REASON="$XRAY_TUNING_DIR/last_reason"
 
 hide_cursor() {
   if [[ -t 1 && "$CURSOR_HIDDEN" -eq 0 ]] && check_command tput; then
@@ -1814,18 +1816,32 @@ xray_auto_tuning_status() {
   fi
 }
 
+xray_tuning_last_state() {
+  [[ -f "$XRAY_TUNING_STATE" ]] && tr -d '\r\n' < "$XRAY_TUNING_STATE" || echo ""
+}
+
+xray_tuning_last_reason() {
+  [[ -f "$XRAY_TUNING_REASON" ]] && cat "$XRAY_TUNING_REASON" || true
+}
+
 xray_apply_auto_tuning_core() {
   local cfg tmp meta_json
   local profile keepalive_idle keepalive_interval user_timeout conn_idle handshake uplink_only downlink_only congestion transport
+  local variant variants rc test_ok=0
   cfg="$(xray_config_path)"
   tmp="$(mktemp)"
   mkdir -p "$XRAY_TUNING_DIR"
+  : > "$XRAY_TUNING_STATE"
+  : > "$XRAY_TUNING_REASON"
 
   IFS='|' read -r profile keepalive_idle keepalive_interval user_timeout conn_idle handshake uplink_only downlink_only congestion transport < <(xray_detect_server_profile)
 
   cp -f "$cfg" "$XRAY_TUNING_BACKUP"
 
-  meta_json="$(XRAY_PROFILE="$profile" XRAY_KEEPALIVE_IDLE="$keepalive_idle" XRAY_KEEPALIVE_INTERVAL="$keepalive_interval" XRAY_TCP_USER_TIMEOUT="$user_timeout" XRAY_CONN_IDLE="$conn_idle" XRAY_HANDSHAKE="$handshake" XRAY_UPLINK_ONLY="$uplink_only" XRAY_DOWNLINK_ONLY="$downlink_only" XRAY_CONGESTION="$congestion" XRAY_TRANSPORT="$transport" python3 - "$cfg" "$tmp" <<'PYCODE'
+  variants=(full no_interval keepalive_only policy_only)
+  for variant in "${variants[@]}"; do
+    set +e
+    meta_json="$(XRAY_PROFILE="$profile" XRAY_KEEPALIVE_IDLE="$keepalive_idle" XRAY_KEEPALIVE_INTERVAL="$keepalive_interval" XRAY_TCP_USER_TIMEOUT="$user_timeout" XRAY_CONN_IDLE="$conn_idle" XRAY_HANDSHAKE="$handshake" XRAY_UPLINK_ONLY="$uplink_only" XRAY_DOWNLINK_ONLY="$downlink_only" XRAY_CONGESTION="$congestion" XRAY_TRANSPORT="$transport" XRAY_VARIANT="$variant" python3 - "$cfg" "$tmp" <<'PYCODE'
 import json, os, sys
 src, dst = sys.argv[1:3]
 with open(src, 'r', encoding='utf-8') as f:
@@ -1842,6 +1858,7 @@ handshake = int(os.environ.get("XRAY_HANDSHAKE", "8"))
 uplink_only = int(os.environ.get("XRAY_UPLINK_ONLY", "20"))
 downlink_only = int(os.environ.get("XRAY_DOWNLINK_ONLY", "20"))
 congestion = os.environ.get("XRAY_CONGESTION", "cubic")
+variant = os.environ.get("XRAY_VARIANT", "full")
 
 def match(node):
     if not isinstance(node, dict):
@@ -1862,11 +1879,17 @@ def match(node):
     return None, None
 
 def apply_sockopt(ss):
+    if variant == "policy_only":
+        return
     sock = ss.setdefault("sockopt", {})
-    sock["tcpCongestion"] = congestion
+    if variant in ("full", "no_interval"):
+        sock["tcpCongestion"] = congestion
     sock["tcpKeepAliveIdle"] = keepalive_idle
-    sock["tcpKeepAliveInterval"] = keepalive_interval
-    sock["tcpUserTimeout"] = user_timeout
+    if variant == "full":
+        sock["tcpKeepAliveInterval"] = keepalive_interval
+        sock["tcpUserTimeout"] = user_timeout
+    elif variant == "no_interval":
+        sock["tcpUserTimeout"] = user_timeout
 
 def ensure_policy(root):
     policy = root.setdefault("policy", {})
@@ -1906,30 +1929,69 @@ ensure_policy(data)
 
 with open(dst, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
-    f.write("\n")
+    f.write("
+")
 
 print(json.dumps({
     "profile": profile,
     "transport": transport,
-    "congestion": congestion,
-    "keepaliveIdle": keepalive_idle,
-    "keepaliveInterval": keepalive_interval,
-    "tcpUserTimeout": user_timeout,
+    "congestion": congestion if variant != "policy_only" else "",
+    "keepaliveIdle": keepalive_idle if variant != "policy_only" else 0,
+    "keepaliveInterval": keepalive_interval if variant == "full" else 0,
+    "tcpUserTimeout": user_timeout if variant in ("full", "no_interval") else 0,
     "connIdle": conn_idle,
     "handshake": handshake,
     "uplinkOnly": uplink_only,
     "downlinkOnly": downlink_only,
+    "variant": variant,
     "speedSafe": True,
     "targets": counts
 }, ensure_ascii=False))
 PYCODE
 )"
+    rc=$?
+    set -e
 
-  xray_test_config_file "$tmp"
-  cp -f "$tmp" "$cfg"
-  rm -f "$tmp"
-  touch "$XRAY_TUNING_MARKER"
-  printf '%s\n' "$meta_json" > "$XRAY_TUNING_META"
+    if [[ "$rc" -eq 11 ]]; then
+      printf '%s
+' "no_target" > "$XRAY_TUNING_STATE"
+      printf '%s
+' "Nenhum inbound/outbound VLESS compatível encontrado." > "$XRAY_TUNING_REASON"
+      rm -f "$tmp" "$XRAY_TUNING_MARKER" "$XRAY_TUNING_META"
+      return 0
+    elif [[ "$rc" -ne 0 ]]; then
+      log "XRAY tuning python failed on variant=$variant rc=$rc"
+      continue
+    fi
+
+    if xray_test_config_file "$tmp"; then
+      test_ok=1
+      break
+    fi
+
+    log "XRAY tuning config test failed on variant=$variant"
+  done
+
+  if [[ "$test_ok" -eq 1 ]]; then
+    cp -f "$tmp" "$cfg"
+    rm -f "$tmp"
+    touch "$XRAY_TUNING_MARKER"
+    printf '%s
+' "$meta_json" > "$XRAY_TUNING_META"
+    printf '%s
+' "applied" > "$XRAY_TUNING_STATE"
+    printf '%s
+' "OK" > "$XRAY_TUNING_REASON"
+    return 0
+  fi
+
+  cp -f "$XRAY_TUNING_BACKUP" "$cfg" 2>/dev/null || true
+  rm -f "$tmp" "$XRAY_TUNING_MARKER" "$XRAY_TUNING_META"
+  printf '%s
+' "unsupported" > "$XRAY_TUNING_STATE"
+  printf '%s
+' "Seu XRAY rejeitou todos os perfis seguros do melhorador." > "$XRAY_TUNING_REASON"
+  return 0
 }
 
 xray_revert_auto_tuning_core() {
@@ -1992,7 +2054,7 @@ PYCODE
   xray_test_config_file "$tmp"
   cp -f "$tmp" "$cfg"
   rm -f "$tmp"
-  rm -f "$XRAY_TUNING_MARKER" "$XRAY_TUNING_META" "$XRAY_TUNING_BACKUP"
+  rm -f "$XRAY_TUNING_MARKER" "$XRAY_TUNING_META" "$XRAY_TUNING_BACKUP" "$XRAY_TUNING_STATE" "$XRAY_TUNING_REASON"
 }
 
 restart_xray_if_present() {
@@ -2434,13 +2496,27 @@ apply_xray_auto_tuning_only() {
   run_step "Aplicando melhorador XRAY automático" "xray_apply_auto_tuning_core"
   run_step "Validando e reiniciando o XRAY" "restart_xray_if_present"
 
-  if xray_auto_tuning_active; then
-    ok "Melhorador XRAY automático ativado."
-    [[ -f "$XRAY_TUNING_META" ]] && echo -e "${DIM}Perfil detectado: $(xray_tuning_profile_name)${NC}" && echo -e "${DIM}Alvos ajustados: $(xray_auto_tuning_targets_summary)${NC}"
-  else
-    warn "Nenhum alvo compatível encontrado no XRAY."
-    [[ -f "$XRAY_TUNING_META" ]] && echo -e "${DIM}Detectado: $(xray_auto_tuning_targets_summary)${NC}"
-  fi
+  case "$(xray_tuning_last_state)" in
+    applied)
+      ok "Melhorador XRAY automático ativado."
+      [[ -f "$XRAY_TUNING_META" ]] && echo -e "${DIM}Perfil detectado: $(xray_tuning_profile_name)${NC}" && echo -e "${DIM}Alvos ajustados: $(xray_auto_tuning_targets_summary)${NC}"
+      ;;
+    no_target)
+      warn "Nenhum alvo compatível encontrado no XRAY."
+      [[ -n "$(xray_tuning_last_reason)" ]] && echo -e "${DIM}$(xray_tuning_last_reason)${NC}"
+      ;;
+    unsupported)
+      warn "O XRAY deste servidor não aceitou os parâmetros seguros do melhorador."
+      [[ -n "$(xray_tuning_last_reason)" ]] && echo -e "${DIM}$(xray_tuning_last_reason)${NC}"
+      ;;
+    *)
+      if xray_auto_tuning_active; then
+        ok "Melhorador XRAY automático ativado."
+      else
+        warn "O melhorador não conseguiu concluir a aplicação."
+      fi
+      ;;
+  esac
   pause
 }
 
