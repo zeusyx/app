@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Firebase</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#08111f;
+  --bg2:#0d1830;
+  --panel:rgba(14,22,42,.92);
+  --panelBorder:rgba(255,255,255,.08);
+  --text:#fff;
+  --muted:#a9b4d0;
+  --soft:rgba(255,255,255,.05);
+  --soft2:rgba(255,255,255,.08);
+  --primary:linear-gradient(90deg,#0072b1 0%,#58a6ff 100%);
+  --shadow:0 20px 50px rgba(0,0,0,.35);
+  --radius:24px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  margin:0;
+  min-height:100vh;
+  font-family:Arial,Helvetica,sans-serif;
+  color:var(--text);
+  background:transparent !important;
+}
+.card{
+  background:var(--panel);
+  border:1px solid var(--panelBorder);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+  backdrop-filter:blur(10px);
+  padding:5px;
+}
+.card2{padding:18px}
+.grid{display:grid;grid-template-columns:1fr;gap:14px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:grid;gap:8px}
+.field.full{grid-column:1/-1}
+label{font-size:13px;font-weight:700;color:#eaf2ff}
+input,textarea{
+  width:100%;
+  border:none;
+  outline:none;
+  border-radius:16px;
+  background:var(--soft);
+  color:var(--text);
+  border:1px solid var(--soft2);
+  padding:14px;
+  font-size:14px;
+  font-family:inherit;
+}
+input::placeholder,textarea::placeholder{color:#8f9dbc}
+input:focus,textarea:focus{border-color:rgba(88,166,255,.6);box-shadow:0 0 0 3px rgba(88,166,255,.12)}
+textarea{min-height:220px;resize:none;line-height:1.5;font-family:Consolas,monospace}
+button{
+  border:none;outline:none;border-radius:18px;padding:12px 16px;font-size:13px;font-weight:800;
+  cursor:pointer;transition:.18s ease;display:flex;align-items:center;justify-content:center;text-align:center;
+}
+button:active{transform:scale(.985)}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:0 14px 30px rgba(0,114,177,.28)}
+.btn-secondary{background:var(--soft);color:#fff;border:1px solid var(--soft2)}
+.btn-danger{background:rgba(255,82,82,.08);color:#fff;border:1px solid rgba(255,82,82,.18)}
+.helper{color:var(--muted);font-size:12px;line-height:1.5}
+.firebase-tabs{display:flex;gap:10px;margin-bottom:16px;overflow:auto;padding-bottom:4px}
+.firebase-tabs::-webkit-scrollbar{height:6px}
+.firebase-tabs::-webkit-scrollbar-thumb{background:rgba(88,166,255,.35);border-radius:6px}
+.firebase-tab-btn{
+  flex:1 1 0;min-width:0;min-height:46px;padding:10px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.06);
+  background:rgba(255,255,255,.04);color:#dceaff;font-size:13px;font-weight:700;cursor:pointer;transition:.2s ease;white-space:nowrap
+}
+.firebase-tab-btn:hover{border-color:#58a6ff;background:rgba(88,166,255,.08)}
+.firebase-tab-btn.active{background:linear-gradient(90deg,#0072b1,#58a6ff);color:#fff;border-color:transparent;box-shadow:0 10px 20px rgba(0,114,177,.25)}
+.firebase-tab{display:none}
+.firebase-tab.active{display:block}
+.status-row{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:end}
+.status-input{height:50px;font-size:13px;font-weight:700}
+.status-idle{color:#dceaff}
+.status-ok{color:#78e08f}
+.status-error{color:#ff8a8a}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.action-single{display:grid;grid-template-columns:1fr;gap:12px}
+.sensitive-wrap{position:relative}
+.sensitive-wrap input{padding-right:96px}
+.sensitive-toggle{
+  position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  min-width:78px;height:34px;border-radius:11px;border:1px solid rgba(88,166,255,.22);
+  background:linear-gradient(180deg,rgba(14,26,52,.96),rgba(12,22,42,.98));color:#dceaff;font-size:12px;font-weight:800;padding:0 12px
+}
+.textarea-wrapper{position:relative}
+.textarea-tools{position:absolute;top:10px;right:10px;z-index:5}
+.textarea-btn{height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--panelBorder);background:var(--bg2);color:#fff;font-size:12px}
+.textarea-btn:hover{border-color:#58a6ff;transform:translateY(-1px)}
+.textarea-wrapper textarea{padding:14px !important}
+@media (max-width:760px){
+  .grid-2,.status-row,.actions{grid-template-columns:1fr}
+  .status-row button{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="firebase-tabs">
+    <button class="firebase-tab-btn" data-tab="firebase" type="button">Firebase</button>
+    <button class="firebase-tab-btn active" data-tab="layout" type="button">Layout</button>
+  </div>
+  <div class="card2">
+    <section class="firebase-tab active" id="tab-layout">
+      <div class="grid">
+        <div class="field full">
+          <label for="firebaseLayoutHtml">Layout HTML</label>
+          <div class="textarea-wrapper">
+            <div class="textarea-tools">
+              <button class="textarea-btn" id="layoutClearBtn" type="button">Limpar</button>
+            </div>
+            <textarea id="firebaseLayoutHtml" placeholder="Cole ou importe aqui o layout.html"></textarea>
+          </div>
+        </div>
+
+        <div class="field full actions">
+          <button class="btn-primary" id="sendLayoutFirebaseBtn" type="button">Atualizar</button>
+          <div hidden="hidden"><button class="btn-secondary" id="importLocalLayoutBtn" type="button" hidden>Importar</button></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="firebase-tab" id="tab-firebase">
+      <div class="grid">
+        <div class="field full status-row">
+          <div class="field">
+            <label>Status</label>
+            <input id="firebaseStatus" class="status-input status-idle" value="Não configurado" readonly>
+          </div>
+          <div hidden="hidden">
+          <button class="btn-secondary" id="importLocalBtn" type="button">Importar Backup</button>
+        </div></div>
+
+        <div class="field">
+          <label for="apiKey">API Key</label>
+          <div class="sensitive-wrap">
+            <input id="apiKey" type="password" placeholder="AIza..." autocomplete="off">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="appId">App ID</label>
+          <div class="sensitive-wrap">
+            <input id="appId" type="password" placeholder="1:xxx:web:xxx" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="databaseURL">Database URL</label>
+          <div class="sensitive-wrap">
+            <input id="databaseURL" type="password" placeholder="https://projeto-default-rtdb.firebaseio.com/" autocomplete="off">
+          </div>
+          
+        </div>
+
+        <div class="field full action-single">
+          <div hidden="hidden">
+          <button class="btn-primary" id="saveFirebaseConfigBtn" type="button">Salvar</button>
+        </div>
+         <button class="btn-primary" id="exportLocalBtn" type="button">Atualizar</button>
+      </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<input class="hidden-input" id="firebaseImportFile" type="file" accept=".json,application/json" hidden>
+<script>
+const FIREBASE_STORAGE_KEY = "painel_firebase_config_v1";
+const FIREBASE_LAYOUT_STORAGE_KEY = "painel_firebase_layout_config_v1";
+const api = window.parent && window.parent.__painelFirebaseApi;
+
+const fields = {
+  apiKey: document.getElementById("apiKey"),
+  appId: document.getElementById("appId"),
+  databaseURL: document.getElementById("databaseURL")
+};
+const layoutFields = {
+  firebaseLayoutHtml: document.getElementById("firebaseLayoutHtml")
+};
+const firebaseStatus = document.getElementById("firebaseStatus");
+const importFileInput = document.getElementById("firebaseImportFile");
+
+const FIREBASE_DEFAULTS = { apiKey:"", appId:"", databaseURL:"" };
+const FIREBASE_REMOTE_PATH = "config/fire";
+
+function showToast(msg, type) {
+  try {
+    if (window.parent && typeof window.parent.showToast === "function") {
+      window.parent.showToast(msg, type || "success");
+      return;
+    }
+  } catch (err) {}
+
+  try {
+    let container = document.getElementById("firebaseInlineToastContainer");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "firebaseInlineToastContainer";
+      container.style.cssText = "position:fixed;left:50%;bottom:20px;transform:translateX(-50%);display:flex;flex-direction:column;gap:10px;z-index:99999;width:min(420px,calc(100% - 32px));pointer-events:none;";
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement("div");
+    toast.textContent = String(msg || "");
+    toast.style.cssText = "background:" + ((type || "success") === "error" ? "rgba(60,18,27,.96)" : "rgba(12,26,34,.96)") + ";color:#fff;border:1px solid " + (((type || "success") === "error") ? "rgba(255,95,95,.2)" : "rgba(88,166,255,.16)") + ";border-radius:14px;padding:12px 14px;font-size:14px;box-shadow:0 20px 50px rgba(0,0,0,.35);opacity:1;transform:translateY(0);transition:opacity .3s ease, transform .3s ease;";
+    container.appendChild(toast);
+    setTimeout(function(){
+      toast.style.opacity = "0";
+      toast.style.transform = "translateY(10px)";
+      setTimeout(function(){ try { toast.remove(); } catch (err) {} }, 300);
+    }, 2500);
+  } catch (err) {
+    try { console[(type || "success") === "error" ? "error" : "log"](msg); } catch (e) {}
+  }
+}
+function normalizeConfig(source) {
+  const s = source && typeof source === "object" ? source : {};
+  return {
+    apiKey: String(s.apiKey || "").trim(),
+    appId: String(s.appId || "").trim(),
+    databaseURL: String(s.databaseURL || "").trim().replace(/\/+$/, "")
+  };
+}
+function readStoredFirebaseConfig() {
+  try { return normalizeConfig(JSON.parse(localStorage.getItem(FIREBASE_STORAGE_KEY) || "{}") || {}); }
+  catch (err) { return normalizeConfig({}); }
+}
+function getFirebaseDefaultConfig() {
+  let next = normalizeConfig(FIREBASE_DEFAULTS);
+  try { next = normalizeConfig(Object.assign({}, next, readStoredFirebaseConfig())); } catch (err) {}
+  try {
+    if (api && typeof api.getConfig === "function") {
+      next = normalizeConfig(Object.assign({}, next, api.getConfig() || {}));
+    }
+  } catch (err) {}
+  return next;
+}
+function getFormFirebaseConfig() {
+  return normalizeConfig({
+    apiKey: fields.apiKey && fields.apiKey.value,
+    appId: fields.appId && fields.appId.value,
+    databaseURL: fields.databaseURL && fields.databaseURL.value
+  });
+}
+function applyFirebaseDefaults(onlyEmpty) {
+  const defaults = getFirebaseDefaultConfig();
+  ["apiKey","appId","databaseURL"].forEach(function(key){
+    const el = fields[key];
+    if (!el) return;
+    const value = String(defaults[key] || "");
+    el.defaultValue = value;
+    if (!onlyEmpty || !String(el.value || "").trim()) el.value = value;
+  });
+}
+function getEffectiveFirebaseConfig() {
+  return normalizeConfig(Object.assign({}, getFirebaseDefaultConfig(), getFormFirebaseConfig()));
+}
+function deriveProjectIdFromDatabaseURL(databaseURL) {
+  try {
+    const host = new URL(String(databaseURL || "")).hostname.toLowerCase();
+    const first = String(host.split(".")[0] || "").trim();
+    return first.replace(/-default-rtdb$/i, "");
+  } catch (err) {
+    return "";
+  }
+}
+function getRemoteFirebasePayload() {
+  const current = getEffectiveFirebaseConfig();
+  let parentConfig = {};
+  try {
+    if (api && typeof api.getConfig === "function") parentConfig = api.getConfig() || {};
+  } catch (err) {}
+  return {
+    apiKey: String(current.apiKey || parentConfig.apiKey || "").trim(),
+    appId: String(current.appId || parentConfig.appId || "").trim(),
+    projectId: String(parentConfig.projectId || deriveProjectIdFromDatabaseURL(current.databaseURL) || "").trim(),
+    databaseURL: String(current.databaseURL || parentConfig.databaseURL || "").trim().replace(/\/+$/, "")
+  };
+}
+async function readRemoteFireConfig(config) {
+  const cfg = normalizeConfig(config || getEffectiveFirebaseConfig());
+  if (api && typeof api.dbRequest === "function") {
+    try {
+      return await api.dbRequest({ ...cfg, path: FIREBASE_REMOTE_PATH, method: "GET" });
+    } catch (err) {}
+  }
+  return await firebaseDirectDbRequest(cfg, FIREBASE_REMOTE_PATH, "GET");
+}
+async function writeRemoteFireConfig(config) {
+  const payload = config && typeof config === "object" ? config : getRemoteFirebasePayload();
+  const cfg = normalizeConfig(payload);
+  if (api && typeof api.dbRequest === "function") {
+    try {
+      await api.dbRequest({ ...cfg, path: FIREBASE_REMOTE_PATH, method: "PUT", payload: payload });
+      return await readRemoteFireConfig(cfg).catch(function(){ return payload; });
+    } catch (err) {}
+  }
+  await firebaseDirectDbRequest(cfg, FIREBASE_REMOTE_PATH, "PUT", payload);
+  return await readRemoteFireConfig(cfg).catch(function(){ return payload; });
+}
+function updateConnectedStatus() {
+  const cfg = getEffectiveFirebaseConfig();
+  const ok = !!(cfg.apiKey && cfg.appId && cfg.databaseURL);
+  firebaseStatus.value = ok ? "Conectado" : "Desconectado";
+  firebaseStatus.classList.remove("status-idle","status-ok","status-error");
+  firebaseStatus.classList.add(ok ? "status-ok" : "status-idle");
+}
+function persistMainConfig(showFeedback) {
+  const payload = getEffectiveFirebaseConfig();
+  try { localStorage.setItem(FIREBASE_STORAGE_KEY, JSON.stringify(payload)); } catch (err) {}
+  try { if (api && typeof api.saveConfig === "function") api.saveConfig(payload); } catch (err) {}
+  applyFirebaseDefaults(false);
+  pushFirebaseRuntimeToParent();
+  updateConnectedStatus();
+  if (showFeedback) showToast("Configuração salva localmente", "success");
+  return payload;
+}
+function pushFirebaseRuntimeToParent() {
+  const config = getEffectiveFirebaseConfig();
+  const layoutConfig = {
+    apiKey: config.apiKey || "",
+    appId: config.appId || "",
+    databaseURL: config.databaseURL || "",
+    html: layoutFields.firebaseLayoutHtml.value || ""
+  };
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "painel-firebase-live-config", payload: config }, "*");
+      window.parent.postMessage({ type: "painel-firebase-layout-live-config", payload: layoutConfig }, "*");
+    }
+  } catch (err) {}
+}
+function persistLayoutState() {
+  try {
+    localStorage.setItem(FIREBASE_LAYOUT_STORAGE_KEY, JSON.stringify({
+      apiKey: getEffectiveFirebaseConfig().apiKey || "",
+      appId: getEffectiveFirebaseConfig().appId || "",
+      databaseURL: getEffectiveFirebaseConfig().databaseURL || "",
+      html: layoutFields.firebaseLayoutHtml.value || ""
+    }));
+  } catch (err) {}
+}
+function loadLayoutState() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FIREBASE_LAYOUT_STORAGE_KEY) || "{}") || {};
+    if (!String(layoutFields.firebaseLayoutHtml.value || "").trim()) {
+      layoutFields.firebaseLayoutHtml.value = String(parsed.html || "");
+    }
+  } catch (err) {}
+}
+function exportLocalBackup() {
+  const payload = { firebase: getEffectiveFirebaseConfig(), layout: layoutFields.firebaseLayoutHtml.value || "" };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "firebase-backup.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast("Backup local salvo", "success");
+}
+function importLocalBackup() {
+  importFileInput.click();
+}
+importFileInput.addEventListener("change", async function() {
+  const file = importFileInput.files && importFileInput.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const firebase = normalizeConfig(parsed.firebase || parsed);
+    if (firebase.apiKey) fields.apiKey.value = firebase.apiKey;
+    if (firebase.appId) fields.appId.value = firebase.appId;
+    if (firebase.databaseURL) fields.databaseURL.value = firebase.databaseURL;
+    if (typeof parsed.layout === "string") layoutFields.firebaseLayoutHtml.value = parsed.layout;
+    persistMainConfig(false);
+    persistLayoutState();
+    showToast("Backup importado com sucesso", "success");
+  } catch (err) {
+    showToast("Backup inválido", "error");
+  } finally {
+    importFileInput.value = "";
+  }
+});
+function bindSensitiveToggles() {
+  document.querySelectorAll(".sensitive-toggle").forEach(function(button){
+    button.addEventListener("click", function(){
+      const target = document.getElementById(button.dataset.target || "");
+      if (!target) return;
+      const show = target.type === "password";
+      target.type = show ? "text" : "password";
+      button.textContent = show ? "Ocultar" : "Mostrar";
+    });
+  });
+}
+function activateTab(name) {
+  document.querySelectorAll(".firebase-tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll(".firebase-tab").forEach((tab) => tab.classList.toggle("active", tab.id === "tab-" + name));
+}
+async function saveFirebaseConfigRemote(showFeedback) {
+  const localPayload = persistMainConfig(false);
+  if (!localPayload.databaseURL) {
+    showToast("Configure o Firebase principal primeiro", "error");
+    return false;
+  }
+  try {
+    const remotePayload = getRemoteFirebasePayload();
+    const saved = await writeRemoteFireConfig(remotePayload);
+    const merged = Object.assign({}, remotePayload, saved && typeof saved === "object" ? saved : {});
+    if (merged.apiKey) fields.apiKey.value = String(merged.apiKey || "");
+    if (merged.appId) fields.appId.value = String(merged.appId || "");
+    if (merged.databaseURL) fields.databaseURL.value = String(merged.databaseURL || "").trim().replace(/\/+$/, "");
+    try { localStorage.setItem(FIREBASE_STORAGE_KEY, JSON.stringify(Object.assign({}, localPayload, merged))); } catch (err) {}
+    persistMainConfig(false);
+    if (showFeedback) showToast("Configuração do Firebase salva no config/fire", "success");
+    return true;
+  } catch (err) {
+    console.error("FIRE CONFIG SAVE ERROR:", err);
+    showToast((err && err.message) || "Erro ao salvar em config/fire", "error");
+    return false;
+  }
+}
+async function autoImportFirebaseConfig() {
+  try {
+    const cfg = persistMainConfig(false);
+    if (!cfg.databaseURL) return false;
+    const remote = await readRemoteFireConfig(cfg).catch(function(){ return null; });
+    if (!remote || typeof remote !== "object") return false;
+    if (String(remote.apiKey || "").trim()) fields.apiKey.value = String(remote.apiKey || "").trim();
+    if (String(remote.appId || "").trim()) fields.appId.value = String(remote.appId || "").trim();
+    if (String(remote.databaseURL || "").trim()) fields.databaseURL.value = String(remote.databaseURL || "").trim().replace(/\/+$/, "");
+    try { localStorage.setItem(FIREBASE_STORAGE_KEY, JSON.stringify(Object.assign({}, getFirebaseDefaultConfig(), remote))); } catch (err) {}
+    persistMainConfig(false);
+    return true;
+  } catch (err) {}
+  return false;
+}
+async function autoImportFirebaseLayout() {
+  try {
+    const cfg = persistMainConfig(false);
+    if (!cfg.databaseURL) return false;
+    const data = await readRemoteAppAtt(cfg);
+    const html = String((data && data.layout) || "").trim();
+    if (html) {
+      layoutFields.firebaseLayoutHtml.value = html;
+      persistLayoutState();
+      pushFirebaseRuntimeToParent();
+      return true;
+    }
+  } catch (err) {}
+  return false;
+}
+
+
+function firebaseDirectDbRequest(config, path, method, payload) {
+  const cfg = normalizeConfig(config || getEffectiveFirebaseConfig());
+  const baseUrl = String(cfg.databaseURL || "").trim().replace(/\/+$/, "");
+  const cleanPath = String(path || "").trim().replace(/^\/+|\/+$/g, "");
+  const httpMethod = String(method || "GET").toUpperCase();
+
+  if (!baseUrl || !cleanPath) {
+    return Promise.reject(new Error("Configure o Firebase principal primeiro"));
+  }
+
+  return fetch(baseUrl + "/" + cleanPath + ".json" + (httpMethod === "GET" ? ("?t=" + Date.now()) : ""), {
+    method: httpMethod,
+    cache: "no-store",
+    headers: Object.assign({ "Accept": "application/json" }, httpMethod !== "GET" ? { "Content-Type": "application/json" } : {}),
+    body: httpMethod !== "GET" ? JSON.stringify(payload === undefined ? {} : payload) : undefined
+  }).then(async function(response){
+    const text = await response.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (err) { data = text || null; }
+    if (!response.ok) {
+      throw new Error((data && (data.error || data.message)) || text || ("HTTP " + response.status));
+    }
+    return data;
+  });
+}
+
+async function readRemoteAppAtt(config) {
+  const cfg = normalizeConfig(config || getEffectiveFirebaseConfig());
+  if (api && typeof api.importLayoutBackup === "function") {
+    try {
+      return await api.importLayoutBackup("appupdate", cfg);
+    } catch (err) {}
+  }
+  return await firebaseDirectDbRequest(cfg, "app/att", "GET");
+}
+
+async function writeRemoteAppAtt(patch, config) {
+  const cfg = normalizeConfig(config || getEffectiveFirebaseConfig());
+  const safePatch = patch && typeof patch === "object" ? patch : {};
+
+  if (api && typeof api.exportLayoutBackup === "function") {
+    try {
+      await api.exportLayoutBackup("appupdate", safePatch, cfg);
+      const verify = await readRemoteAppAtt(cfg).catch(function(){ return null; });
+      if (verify && typeof verify === "object") {
+        const expectedLayout = Object.prototype.hasOwnProperty.call(safePatch, "layout") ? String(safePatch.layout || "") : null;
+        if (expectedLayout === null || String((verify && verify.layout) || "") === expectedLayout) {
+          return verify;
+        }
+      }
+    } catch (err) {
+      console.error("APP/ATT API EXPORT FALLBACK:", err);
+    }
+  }
+
+  const current = await firebaseDirectDbRequest(cfg, "app/att", "GET").catch(function(){ return {}; });
+  const base = current && typeof current === "object" ? current : {};
+  const next = Object.assign({}, base, safePatch);
+  await firebaseDirectDbRequest(cfg, "app/att", "PUT", next);
+  const confirmed = await firebaseDirectDbRequest(cfg, "app/att", "GET");
+  return confirmed && typeof confirmed === "object" ? confirmed : next;
+}
+
+async function updateFirebaseLayoutRemote() {
+  const html = String(layoutFields.firebaseLayoutHtml.value || "");
+  const cfg = persistMainConfig(false);
+  if (!html.trim()) {
+    showToast("Cole um layout primeiro", "error");
+    return false;
+  }
+  if (!cfg.databaseURL) {
+    showToast("Configure o Firebase principal primeiro", "error");
+    return false;
+  }
+
+  const sendBtn = document.getElementById("sendLayoutFirebaseBtn");
+  const importBtn = document.getElementById("importLocalLayoutBtn");
+  if (sendBtn) sendBtn.disabled = true;
+  if (importBtn) importBtn.disabled = true;
+
+  try {
+    const result = await writeRemoteAppAtt({ layout: html }, cfg);
+    const savedLayout = String((result && result.layout) || "");
+    if (savedLayout !== html) {
+      throw new Error("O Firebase não confirmou a atualização do layout.");
+    }
+    persistLayoutState();
+    pushFirebaseRuntimeToParent();
+    showToast("Atualizado com sucesso", "success");
+    return true;
+  } catch (err) {
+    console.error("FIREBASE LAYOUT UPDATE ERROR:", err);
+    showToast((err && err.message) || "Erro ao atualizar", "error");
+    return false;
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+    if (importBtn) importBtn.disabled = false;
+  }
+}
+
+async function importFirebaseLayoutRemote() {
+  const cfg = persistMainConfig(false);
+  if (!cfg.databaseURL) {
+    showToast("Configure o Firebase principal primeiro", "error");
+    return false;
+  }
+
+  const sendBtn = document.getElementById("sendLayoutFirebaseBtn");
+  const importBtn = document.getElementById("importLocalLayoutBtn");
+  if (sendBtn) sendBtn.disabled = true;
+  if (importBtn) importBtn.disabled = true;
+
+  try {
+    const data = await readRemoteAppAtt(cfg);
+    layoutFields.firebaseLayoutHtml.value = String((data && data.layout) || "");
+    persistLayoutState();
+    pushFirebaseRuntimeToParent();
+    showToast("Importado com sucesso", "success");
+    return true;
+  } catch (err) {
+    console.error("FIREBASE LAYOUT IMPORT ERROR:", err);
+    showToast((err && err.message) || "Erro ao importar", "error");
+    return false;
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+    if (importBtn) importBtn.disabled = false;
+  }
+}
+
+document.querySelectorAll(".firebase-tab-btn").forEach(function(button){
+  button.addEventListener("click", function(){ activateTab(button.dataset.tab || "firebase"); });
+});
+
+document.getElementById("saveFirebaseConfigBtn").addEventListener("click", function(){ saveFirebaseConfigRemote(true); });
+document.getElementById("exportLocalBtn").addEventListener("click", function() {saveFirebaseConfigRemote(true); exportLocalBackup();});
+document.getElementById("importLocalBtn").addEventListener("click", importLocalBackup);
+document.getElementById("layoutClearBtn").addEventListener("click", function(){
+  layoutFields.firebaseLayoutHtml.value = "";
+  persistLayoutState();
+  pushFirebaseRuntimeToParent();
+  showToast("Layout limpo", "success");
+});
+document.getElementById("sendLayoutFirebaseBtn").addEventListener("click", function() { updateFirebaseLayoutRemote(); });
+document.getElementById("importLocalLayoutBtn").addEventListener("click", function() { importFirebaseLayoutRemote(); });
+
+[fields.apiKey,fields.appId,fields.databaseURL].forEach(function(field){
+  if (!field) return;
+  field.addEventListener("input", function(){
+    try { localStorage.setItem(FIREBASE_STORAGE_KEY, JSON.stringify(getFormFirebaseConfig())); } catch (err) {}
+    pushFirebaseRuntimeToParent();
+    updateConnectedStatus();
+  });
+});
+layoutFields.firebaseLayoutHtml.addEventListener("input", function(){ persistLayoutState(); pushFirebaseRuntimeToParent(); });
+
+bindSensitiveToggles();
+applyFirebaseDefaults(true);
+loadLayoutState();
+persistMainConfig(false);
+updateConnectedStatus();
+activateTab("firebase");
+setTimeout(autoImportFirebaseConfig, 30);
+setTimeout(autoImportFirebaseConfig, 350);
+setTimeout(autoImportFirebaseLayout, 50);
+setTimeout(autoImportFirebaseLayout, 500);
+setTimeout(autoImportFirebaseLayout, 1200);
+window.__painelAutoImport = async function(){ await autoImportFirebaseConfig().catch(function(){}); return autoImportFirebaseLayout(); };
+window.__painelTopClear = async function(){ return false; };
+</script>
+</body>
+</html>
